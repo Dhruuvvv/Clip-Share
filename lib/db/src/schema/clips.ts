@@ -1,11 +1,15 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const clipsTable = pgTable("clips", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
-  type: text("type", { enum: ["text", "link"] }).notNull().default("text"),
+  type: text("type", { enum: ["text", "link", "file"] }).notNull().default("text"),
+  fileName: text("file_name"),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  objectPath: text("object_path"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

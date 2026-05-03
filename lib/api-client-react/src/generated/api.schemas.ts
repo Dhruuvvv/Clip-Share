@@ -14,12 +14,17 @@ export type ClipType = (typeof ClipType)[keyof typeof ClipType];
 export const ClipType = {
   text: "text",
   link: "link",
+  file: "file",
 } as const;
 
 export interface Clip {
   id: number;
   content: string;
   type: ClipType;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  objectPath?: string | null;
   createdAt: string;
 }
 
@@ -32,13 +37,29 @@ export interface CreateClipBody {
   /** @minLength 1 */
   content: string;
   type: ClipType;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  objectPath?: string | null;
 }
 
 export interface ClipSummary {
   totalClips: number;
   textCount: number;
   linkCount: number;
+  fileCount: number;
   recentClips: Clip[];
+}
+
+export interface RequestUploadUrlBody {
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+export interface RequestUploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
 }
 
 export type ListClipsParams = {

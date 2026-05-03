@@ -68,6 +68,7 @@ clipsRouter.get("/clips/summary", async (req, res) => {
         totalClips: count(),
         textCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'text' then 1 else 0 end) as int)`,
         linkCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'link' then 1 else 0 end) as int)`,
+        fileCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'file' then 1 else 0 end) as int)`,
       })
       .from(clipsTable),
     db
@@ -82,6 +83,7 @@ clipsRouter.get("/clips/summary", async (req, res) => {
     totalClips: row?.totalClips ?? 0,
     textCount: row?.textCount ?? 0,
     linkCount: row?.linkCount ?? 0,
+    fileCount: row?.fileCount ?? 0,
     recentClips,
   });
 });

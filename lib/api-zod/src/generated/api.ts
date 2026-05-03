@@ -32,7 +32,11 @@ export const ListClipsResponse = zod.object({
     zod.object({
       id: zod.number(),
       content: zod.string(),
-      type: zod.enum(["text", "link"]),
+      type: zod.enum(["text", "link", "file"]),
+      fileName: zod.string().nullish(),
+      fileSize: zod.number().nullish(),
+      mimeType: zod.string().nullish(),
+      objectPath: zod.string().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -45,7 +49,11 @@ export const ListClipsResponse = zod.object({
 
 export const CreateClipBody = zod.object({
   content: zod.string().min(1),
-  type: zod.enum(["text", "link"]),
+  type: zod.enum(["text", "link", "file"]),
+  fileName: zod.string().nullish(),
+  fileSize: zod.number().nullish(),
+  mimeType: zod.string().nullish(),
+  objectPath: zod.string().nullish(),
 });
 
 /**
@@ -63,12 +71,31 @@ export const GetClipSummaryResponse = zod.object({
   totalClips: zod.number(),
   textCount: zod.number(),
   linkCount: zod.number(),
+  fileCount: zod.number(),
   recentClips: zod.array(
     zod.object({
       id: zod.number(),
       content: zod.string(),
-      type: zod.enum(["text", "link"]),
+      type: zod.enum(["text", "link", "file"]),
+      fileName: zod.string().nullish(),
+      fileSize: zod.number().nullish(),
+      mimeType: zod.string().nullish(),
+      objectPath: zod.string().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
+});
+
+/**
+ * @summary Request a presigned upload URL
+ */
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string(),
+  size: zod.number(),
+  contentType: zod.string(),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
 });

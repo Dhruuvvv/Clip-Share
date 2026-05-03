@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: clips
     description: Clipboard item operations
+  - name: storage
+    description: Object storage operations
 paths:
   /healthz:
     get:
@@ -98,6 +100,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ClipSummary"
 
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -110,7 +131,7 @@ components:
 
     ClipType:
       type: string
-      enum: [text, link]
+      enum: [text, link, file]
 
     Clip:
       type: object
@@ -121,6 +142,18 @@ components:
           type: string
         type:
           $ref: "#/components/schemas/ClipType"
+        fileName:
+          type: string
+          nullable: true
+        fileSize:
+          type: integer
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        objectPath:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -151,6 +184,18 @@ components:
           minLength: 1
         type:
           $ref: "#/components/schemas/ClipType"
+        fileName:
+          type: string
+          nullable: true
+        fileSize:
+          type: integer
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        objectPath:
+          type: string
+          nullable: true
       required:
         - content
         - type
@@ -164,6 +209,8 @@ components:
           type: integer
         linkCount:
           type: integer
+        fileCount:
+          type: integer
         recentClips:
           type: array
           items:
@@ -172,4 +219,30 @@ components:
         - totalClips
         - textCount
         - linkCount
+        - fileCount
         - recentClips
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath

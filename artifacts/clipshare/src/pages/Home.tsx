@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Trash2, Link as LinkIcon, FileText, Send } from "lucide-react";
+import { Copy, Trash2, Link as LinkIcon, FileText, Send, Paperclip, Download } from "lucide-react";
 import { 
   useListClips, 
   getListClipsQueryKey, 
@@ -9,6 +9,7 @@ import {
   useGetClipSummary,
   getGetClipSummaryQueryKey
 } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { isUrl, cn } from "@/lib/utils";
@@ -21,6 +22,64 @@ export default function Home() {
   const [input, setInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const formatFileSize = (bytes?: number | null) => {
+    if (bytes === undefined || bytes === null) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  };
+
+  const { uploadFile, isUploading } = useUpload({
+    onSuccess: (response) => {
+      const file = fileInputRef.current?.files?.[0];
+      if (!file) return;
+
+      createClip.mutate({
+        data: {
+          content: file.name,
+          type: "file",
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          objectPath: response.objectPath,
+        }
+      }, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListClipsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetClipSummaryQueryKey() });
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+          toast({
+            description: "File uploaded successfully",
+            duration: 2000,
+          });
+        },
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to save clip.",
+            variant: "destructive"
+          });
+        }
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload file.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadFile(file);
+  };
 
   const { data: clipsData, isLoading: isLoadingClips } = useListClips(
     { limit: 50 }, 
@@ -136,10 +195,27 @@ export default function Home() {
               <span className="text-xs text-muted-foreground hidden sm:inline-block">
                 Press Enter to save
               </span>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileSelect} 
+                className="hidden" 
+                accept="image/*,application/pdf,.docx,.xlsx"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || createClip.isPending}
+                className="rounded-full shadow-sm hover-elevate"
+              >
+                {isUploading ? "Uploading..." : <Paperclip className="h-4 w-4" />}
+              </Button>
               <Button 
                 type="submit" 
                 size="sm" 
-                disabled={!input.trim() || createClip.isPending}
+                disabled={!input.trim() || createClip.isPending || isUploading}
                 className="rounded-full shadow-sm hover-elevate"
                 data-testid="button-submit-clip"
               >
@@ -177,7 +253,27 @@ export default function Home() {
                   <div className="p-4 sm:p-5 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        {clip.type === 'link' ? (
+                        {clip.type === 'file' ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <p className="text-foreground font-medium break-words">
+                                {clip.fileName || clip.content}
+                              </p>
+                              {clip.fileSize && (
+                                <span className="text-xs text-muted-foreground">
+                                  ({formatFileSize(clip.fileSize)})
+                                </span>
+                              )}
+                            </div>
+                            {clip.mimeType?.startsWith('image/') && clip.objectPath && (
+                              <img 
+                                src={`/api/storage${clip.objectPath}`} 
+                                className="max-h-24 w-auto rounded object-cover" 
+                                alt={clip.fileName || 'Image preview'} 
+                              />
+                            )}
+                          </div>
+                        ) : clip.type === 'link' ? (
                           <a 
                             href={clip.content.startsWith('http') ? clip.content : `https://${clip.content}`} 
                             target="_blank" 
@@ -197,13 +293,29 @@ export default function Home() {
                     <div className="flex items-center justify-between pt-2">
                       <Badge variant="outline" className={cn(
                         "text-xs font-normal border-transparent",
-                        clip.type === 'link' ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+                        clip.type === 'file' ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" :
+                        clip.type === 'link' ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : 
+                        "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
                       )}>
-                        {clip.type === 'link' ? <LinkIcon className="w-3 h-3 mr-1" /> : <FileText className="w-3 h-3 mr-1" />}
-                        {clip.type === 'link' ? 'Link' : 'Text'}
+                        {clip.type === 'file' ? <Paperclip className="w-3 h-3 mr-1" /> :
+                         clip.type === 'link' ? <LinkIcon className="w-3 h-3 mr-1" /> : 
+                         <FileText className="w-3 h-3 mr-1" />}
+                        {clip.type === 'file' ? 'File' :
+                         clip.type === 'link' ? 'Link' : 
+                         'Text'}
                       </Badge>
                       
                       <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        {clip.type === 'file' && clip.objectPath && (
+                          <a
+                            href={`/api/storage${clip.objectPath}`}
+                            download={clip.fileName || clip.content}
+                            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 text-muted-foreground"
+                            title="Download file"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
