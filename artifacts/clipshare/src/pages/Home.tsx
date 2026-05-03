@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Copy, Trash2, Link as LinkIcon, FileText, Send,
   Paperclip, Download, Lock, LogOut, Pin, GripVertical,
+  Search, X,
 } from "lucide-react";
 import {
   DndContext,
@@ -37,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { usePassphrase } from "@/contexts/passphrase-context";
 import { encryptText, decryptText } from "@/lib/crypto";
 
@@ -57,6 +59,30 @@ function savePinnedOrder(order: number[]) {
   localStorage.setItem(PINNED_ORDER_KEY, JSON.stringify(order));
 }
 
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase() ? (
+      <mark key={i} className="bg-yellow-200 dark:bg-yellow-700/60 text-foreground rounded-[2px] px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    )
+  );
+}
+
+function matchesSearch(clip: DecryptedClip, query: string): boolean {
+  if (!query.trim()) return true;
+  const q = query.toLowerCase();
+  if (clip.decryptFailed) return false;
+  if (clip.displayContent?.toLowerCase().includes(q)) return true;
+  if (clip.fileName?.toLowerCase().includes(q)) return true;
+  return false;
+}
+
 function formatFileSize(bytes?: number | null) {
   if (bytes === undefined || bytes === null) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -66,6 +92,7 @@ function formatFileSize(bytes?: number | null) {
 
 interface ClipCardProps {
   clip: DecryptedClip;
+  searchQuery: string;
   onCopy: (content: string) => void;
   onDelete: (id: number) => void;
   onTogglePin: (id: number, pinned: boolean) => void;
@@ -74,7 +101,7 @@ interface ClipCardProps {
   dragHandle?: React.ReactNode;
 }
 
-function ClipCard({ clip, onCopy, onDelete, onTogglePin, onLock, deleteIsPending, dragHandle }: ClipCardProps) {
+function ClipCard({ clip, searchQuery, onCopy, onDelete, onTogglePin, onLock, deleteIsPending, dragHandle }: ClipCardProps) {
   return (
     <Card
       className={cn(
@@ -122,11 +149,11 @@ function ClipCard({ clip, onCopy, onDelete, onTogglePin, onLock, deleteIsPending
                   rel="noopener noreferrer"
                   className="text-primary hover:underline underline-offset-4 break-words line-clamp-3 leading-relaxed"
                 >
-                  {clip.displayContent}
+                  {highlightText(clip.displayContent, searchQuery)}
                 </a>
               ) : (
                 <p className="text-foreground whitespace-pre-wrap break-words leading-relaxed text-sm sm:text-base">
-                  {clip.displayContent}
+                  {highlightText(clip.displayContent, searchQuery)}
                 </p>
               )}
             </div>
@@ -261,6 +288,7 @@ function SortableClipCard(props: ClipCardProps) {
 
 export default function Home() {
   const [input, setInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [decryptedClips, setDecryptedClips] = useState<DecryptedClip[]>([]);
   const [pinnedOrder, setPinnedOrder] = useState<number[]>(loadPinnedOrder);
   const { toast } = useToast();
@@ -447,14 +475,20 @@ export default function Home() {
   };
 
   const clipsById = Object.fromEntries(decryptedClips.map((c) => [c.id, c]));
-  const pinnedClips = pinnedOrder
+  const allPinnedClips = pinnedOrder
     .map((id) => clipsById[id])
     .filter((c): c is DecryptedClip => !!c && c.pinned);
-  const recentClips = decryptedClips.filter((c) => !c.pinned);
+  const allRecentClips = decryptedClips.filter((c) => !c.pinned);
+
+  const pinnedClips = allPinnedClips.filter((c) => matchesSearch(c, searchQuery));
+  const recentClips = allRecentClips.filter((c) => matchesSearch(c, searchQuery));
+  const hasNoResults = searchQuery.trim() !== "" && pinnedClips.length === 0 && recentClips.length === 0;
+
   const totalClips = summaryData?.totalClips || 0;
 
   const cardProps = (clip: DecryptedClip) => ({
     clip,
+    searchQuery,
     onCopy: handleCopy,
     onDelete: handleDelete,
     onTogglePin: handleTogglePin,
@@ -494,6 +528,29 @@ export default function Home() {
             </Button>
           </div>
         </header>
+
+        {/* Search */}
+        {decryptedClips.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search clips..."
+              className="pl-9 pr-9 bg-card"
+              data-testid="input-search"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Input */}
         <section>
@@ -550,6 +607,20 @@ export default function Home() {
               Paste something above to get started. It will instantly appear here on all your devices.
             </p>
           </div>
+        ) : hasNoResults ? (
+          <div className="text-center py-16 px-4 bg-secondary/30 rounded-xl border border-dashed border-border">
+            <Search className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-muted-foreground font-medium">No results found</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">
+              Nothing matches <span className="font-mono">"{searchQuery}"</span>
+            </p>
+            <button
+              onClick={() => setSearchQuery("")}
+              className="mt-3 text-sm text-primary hover:underline"
+            >
+              Clear search
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col gap-8 pb-12">
 
@@ -564,7 +635,9 @@ export default function Home() {
                       {pinnedClips.length}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Drag to reorder</span>
+                  {!searchQuery && (
+                    <span className="text-xs text-muted-foreground">Drag to reorder</span>
+                  )}
                 </div>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext
@@ -582,29 +655,32 @@ export default function Home() {
             )}
 
             {/* Recent Section */}
-            <section className="flex flex-col gap-3">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-semibold text-base">
-                    {pinnedClips.length > 0 ? "Recent" : "Your Clips"}
-                  </h2>
-                  <Badge variant="secondary" className="font-normal text-xs" data-testid="badge-clip-count">
-                    {totalClips} {totalClips === 1 ? "clip" : "clips"}
-                  </Badge>
+            {recentClips.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold text-base">
+                      {allPinnedClips.length > 0 ? "Recent" : "Your Clips"}
+                    </h2>
+                    {!searchQuery && (
+                      <Badge variant="secondary" className="font-normal text-xs" data-testid="badge-clip-count">
+                        {totalClips} {totalClips === 1 ? "clip" : "clips"}
+                      </Badge>
+                    )}
+                    {searchQuery && (
+                      <span className="text-xs text-muted-foreground bg-secondary rounded-full px-2 py-0.5">
+                        {recentClips.length} match{recentClips.length !== 1 ? "es" : ""}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {recentClips.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  All clips are pinned.
-                </p>
-              ) : (
                 <div className="flex flex-col gap-3">
                   {recentClips.map((clip) => (
                     <ClipCard key={clip.id} {...cardProps(clip)} />
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+            )}
           </div>
         )}
       </div>
