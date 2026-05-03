@@ -26,6 +26,7 @@ import type {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   SaltResponse,
+  UpdateClipBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -356,6 +357,93 @@ export const useCreateClip = <
   TContext
 > => {
   return useMutation(getCreateClipMutationOptions(options));
+};
+
+/**
+ * @summary Update a clipboard item
+ */
+export const getUpdateClipUrl = (id: number) => {
+  return `/api/clips/${id}`;
+};
+
+export const updateClip = async (
+  id: number,
+  updateClipBody: UpdateClipBody,
+  options?: RequestInit,
+): Promise<Clip> => {
+  return customFetch<Clip>(getUpdateClipUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateClipBody),
+  });
+};
+
+export const getUpdateClipMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClip>>,
+    TError,
+    { id: number; data: BodyType<UpdateClipBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateClip>>,
+  TError,
+  { id: number; data: BodyType<UpdateClipBody> },
+  TContext
+> => {
+  const mutationKey = ["updateClip"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateClip>>,
+    { id: number; data: BodyType<UpdateClipBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateClip(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateClipMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateClip>>
+>;
+export type UpdateClipMutationBody = BodyType<UpdateClipBody>;
+export type UpdateClipMutationError = ErrorType<void>;
+
+/**
+ * @summary Update a clipboard item
+ */
+export const useUpdateClip = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClip>>,
+    TError,
+    { id: number; data: BodyType<UpdateClipBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateClip>>,
+  TError,
+  { id: number; data: BodyType<UpdateClipBody> },
+  TContext
+> => {
+  return useMutation(getUpdateClipMutationOptions(options));
 };
 
 /**

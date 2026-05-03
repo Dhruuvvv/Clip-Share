@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { clipsTable } from "@workspace/db";
-import { desc, eq, count, sql } from "drizzle-orm";
+import { desc, eq, count, sql, asc } from "drizzle-orm";
 import {
   CreateClipBody,
   DeleteClipParams,
   ListClipsQueryParams,
+  UpdateClipBody,
 } from "@workspace/api-zod";
 
 const clipsRouter = Router();
@@ -23,7 +24,7 @@ clipsRouter.get("/clips", async (req, res) => {
     db
       .select()
       .from(clipsTable)
-      .orderBy(desc(clipsTable.createdAt))
+      .orderBy(desc(clipsTable.pinned), desc(clipsTable.createdAt))
       .limit(limit)
       .offset(offset),
     db.select({ value: count() }).from(clipsTable),
@@ -46,6 +47,34 @@ clipsRouter.post("/clips", async (req, res) => {
     .returning();
 
   res.status(201).json(clip);
+});
+
+// PATCH /clips/:id — update a clip (e.g. toggle pin)
+clipsRouter.patch("/clips/:id", async (req, res) => {
+  const idParsed = DeleteClipParams.safeParse({ id: req.params.id });
+  if (!idParsed.success) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const bodyParsed = UpdateClipBody.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({ error: "Invalid body", details: bodyParsed.error.issues });
+    return;
+  }
+
+  const [updated] = await db
+    .update(clipsTable)
+    .set(bodyParsed.data)
+    .where(eq(clipsTable.id, idParsed.data.id))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Clip not found" });
+    return;
+  }
+
+  res.json(updated);
 });
 
 // DELETE /clips/:id — delete a clip

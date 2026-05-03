@@ -31,6 +31,7 @@ export interface Clip {
   objectPath?: string | null;
   iv?: string | null;
   encrypted?: boolean | null;
+  pinned: boolean;
   createdAt: string;
 }
 
@@ -49,6 +50,10 @@ export interface CreateClipBody {
   objectPath?: string | null;
   iv?: string | null;
   encrypted?: boolean | null;
+}
+
+export interface UpdateClipBody {
+  pinned: boolean;
 }
 
 export interface ClipSummary {

@@ -86,6 +86,31 @@ paths:
                 $ref: "#/components/schemas/Clip"
 
   /clips/{id}:
+    patch:
+      operationId: updateClip
+      tags: [clips]
+      summary: Update a clipboard item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClipBody"
+      responses:
+        "200":
+          description: Updated clipboard item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Clip"
+        "404":
+          description: Clip not found
     delete:
       operationId: deleteClip
       tags: [clips]
@@ -181,6 +206,8 @@ components:
         encrypted:
           type: boolean
           nullable: true
+        pinned:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -188,6 +215,7 @@ components:
         - id
         - content
         - type
+        - pinned
         - createdAt
 
     ClipList:
@@ -232,6 +260,14 @@ components:
       required:
         - content
         - type
+
+    UpdateClipBody:
+      type: object
+      properties:
+        pinned:
+          type: boolean
+      required:
+        - pinned
 
     ClipSummary:
       type: object

@@ -45,6 +45,7 @@ export const ListClipsResponse = zod.object({
       objectPath: zod.string().nullish(),
       iv: zod.string().nullish(),
       encrypted: zod.boolean().nullish(),
+      pinned: zod.boolean(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -64,6 +65,31 @@ export const CreateClipBody = zod.object({
   objectPath: zod.string().nullish(),
   iv: zod.string().nullish(),
   encrypted: zod.boolean().nullish(),
+});
+
+/**
+ * @summary Update a clipboard item
+ */
+export const UpdateClipParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateClipBody = zod.object({
+  pinned: zod.boolean(),
+});
+
+export const UpdateClipResponse = zod.object({
+  id: zod.number(),
+  content: zod.string(),
+  type: zod.enum(["text", "link", "file"]),
+  fileName: zod.string().nullish(),
+  fileSize: zod.number().nullish(),
+  mimeType: zod.string().nullish(),
+  objectPath: zod.string().nullish(),
+  iv: zod.string().nullish(),
+  encrypted: zod.boolean().nullish(),
+  pinned: zod.boolean(),
+  createdAt: zod.coerce.date(),
 });
 
 /**
@@ -92,6 +118,7 @@ export const GetClipSummaryResponse = zod.object({
       objectPath: zod.string().nullish(),
       iv: zod.string().nullish(),
       encrypted: zod.boolean().nullish(),
+      pinned: zod.boolean(),
       createdAt: zod.coerce.date(),
     }),
   ),

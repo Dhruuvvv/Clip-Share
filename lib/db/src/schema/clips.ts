@@ -12,6 +12,7 @@ export const clipsTable = pgTable("clips", {
   objectPath: text("object_path"),
   iv: text("iv"),
   encrypted: boolean("encrypted").default(false),
+  pinned: boolean("pinned").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
