@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ClipShare API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: clips
+    description: Clipboard item operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /clips:
+    get:
+      operationId: listClips
+      tags: [clips]
+      summary: List all clipboard items
+      description: Returns all clipboard items, most recent first
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of clipboard items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClipList"
+    post:
+      operationId: createClip
+      tags: [clips]
+      summary: Create a new clipboard item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClipBody"
+      responses:
+        "201":
+          description: Created clipboard item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Clip"
+
+  /clips/{id}:
+    delete:
+      operationId: deleteClip
+      tags: [clips]
+      summary: Delete a clipboard item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted successfully
+
+  /clips/summary:
+    get:
+      operationId: getClipSummary
+      tags: [clips]
+      summary: Get clipboard usage summary
+      description: Returns counts and stats about stored clips
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClipSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +108,68 @@ components:
       required:
         - status
 
+    ClipType:
+      type: string
+      enum: [text, link]
+
+    Clip:
+      type: object
+      properties:
+        id:
+          type: integer
+        content:
+          type: string
+        type:
+          $ref: "#/components/schemas/ClipType"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - content
+        - type
+        - createdAt
+
+    ClipList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Clip"
+        total:
+          type: integer
+      required:
+        - items
+        - total
+
+    CreateClipBody:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+        type:
+          $ref: "#/components/schemas/ClipType"
+      required:
+        - content
+        - type
+
+    ClipSummary:
+      type: object
+      properties:
+        totalClips:
+          type: integer
+        textCount:
+          type: integer
+        linkCount:
+          type: integer
+        recentClips:
+          type: array
+          items:
+            $ref: "#/components/schemas/Clip"
+      required:
+        - totalClips
+        - textCount
+        - linkCount
+        - recentClips
