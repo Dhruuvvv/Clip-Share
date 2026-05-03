@@ -285,9 +285,12 @@ export default function Home() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         {clip.decryptFailed ? (
-                          <p className="text-muted-foreground text-sm italic">
-                            Could not decrypt — wrong passphrase?
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <p className="text-muted-foreground text-sm">
+                              Locked — cannot decrypt with current passphrase
+                            </p>
+                          </div>
                         ) : clip.type === 'file' ? (
                           <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-2">
@@ -338,46 +341,58 @@ export default function Home() {
                            <FileText className="w-3 h-3 mr-1" />}
                           {clip.type === 'file' ? 'File' : clip.type === 'link' ? 'Link' : 'Text'}
                         </Badge>
-                        {clip.encrypted && (
+                        {clip.encrypted && !clip.decryptFailed && (
                           <Lock className="w-3 h-3 text-emerald-500" title="End-to-end encrypted" />
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        {clip.type === 'file' && clip.objectPath && (
-                          <a
-                            href={`/api/storage${clip.objectPath}`}
-                            download={clip.fileName || clip.displayContent}
-                            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 text-muted-foreground"
-                            title="Download file"
-                          >
-                            <Download className="h-4 w-4" />
-                          </a>
-                        )}
-                        {clip.type !== 'file' && (
+                      {clip.decryptFailed ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={lock}
+                          className="h-7 text-xs gap-1.5 text-muted-foreground"
+                        >
+                          <Lock className="w-3 h-3" />
+                          Re-enter passphrase
+                        </Button>
+                      ) : (
+                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          {clip.type === 'file' && clip.objectPath && (
+                            <a
+                              href={`/api/storage${clip.objectPath}`}
+                              download={clip.fileName || clip.displayContent}
+                              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 text-muted-foreground"
+                              title="Download file"
+                            >
+                              <Download className="h-4 w-4" />
+                            </a>
+                          )}
+                          {clip.type !== 'file' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleCopy(clip.displayContent)}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
+                              title="Copy to clipboard"
+                              data-testid={`button-copy-${clip.id}`}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleCopy(clip.displayContent)}
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
-                            title="Copy to clipboard"
-                            data-testid={`button-copy-${clip.id}`}
+                            onClick={() => handleDelete(clip.id)}
+                            disabled={deleteClip.isPending && deleteClip.variables?.id === clip.id}
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="Delete clip"
+                            data-testid={`button-delete-${clip.id}`}
                           >
-                            <Copy className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(clip.id)}
-                          disabled={deleteClip.isPending && deleteClip.variables?.id === clip.id}
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          title="Delete clip"
-                          data-testid={`button-delete-${clip.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
