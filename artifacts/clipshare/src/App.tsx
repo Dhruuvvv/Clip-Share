@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PassphraseProvider } from "@/contexts/passphrase-context";
+import { PassphraseGate } from "@/components/passphrase-gate";
 
 const queryClient = new QueryClient();
 
@@ -22,9 +24,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
+          <PassphraseProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <PassphraseGate>
+                <Router />
+              </PassphraseGate>
+            </WouterRouter>
+          </PassphraseProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

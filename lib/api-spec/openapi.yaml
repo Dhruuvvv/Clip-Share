@@ -14,13 +14,14 @@ tags:
     description: Clipboard item operations
   - name: storage
     description: Object storage operations
+  - name: settings
+    description: App settings
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -29,12 +30,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  /salt:
+    get:
+      operationId: getSalt
+      tags: [settings]
+      summary: Get or create the app-wide encryption salt
+      description: Returns a stable salt used to derive the AES key from a passphrase. Generated once, stored server-side.
+      responses:
+        "200":
+          description: Salt value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaltResponse"
+
   /clips:
     get:
       operationId: listClips
       tags: [clips]
       summary: List all clipboard items
-      description: Returns all clipboard items, most recent first
       parameters:
         - name: limit
           in: query
@@ -91,7 +105,6 @@ paths:
       operationId: getClipSummary
       tags: [clips]
       summary: Get clipboard usage summary
-      description: Returns counts and stats about stored clips
       responses:
         "200":
           description: Summary stats
@@ -129,6 +142,14 @@ components:
       required:
         - status
 
+    SaltResponse:
+      type: object
+      properties:
+        salt:
+          type: string
+      required:
+        - salt
+
     ClipType:
       type: string
       enum: [text, link, file]
@@ -153,6 +174,12 @@ components:
           nullable: true
         objectPath:
           type: string
+          nullable: true
+        iv:
+          type: string
+          nullable: true
+        encrypted:
+          type: boolean
           nullable: true
         createdAt:
           type: string
@@ -195,6 +222,12 @@ components:
           nullable: true
         objectPath:
           type: string
+          nullable: true
+        iv:
+          type: string
+          nullable: true
+        encrypted:
+          type: boolean
           nullable: true
       required:
         - content

@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,7 +15,14 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Returns all clipboard items, most recent first
+ * Returns a stable salt used to derive the AES key from a passphrase. Generated once, stored server-side.
+ * @summary Get or create the app-wide encryption salt
+ */
+export const GetSaltResponse = zod.object({
+  salt: zod.string(),
+});
+
+/**
  * @summary List all clipboard items
  */
 export const listClipsQueryLimitDefault = 50;
@@ -37,6 +43,8 @@ export const ListClipsResponse = zod.object({
       fileSize: zod.number().nullish(),
       mimeType: zod.string().nullish(),
       objectPath: zod.string().nullish(),
+      iv: zod.string().nullish(),
+      encrypted: zod.boolean().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),
@@ -54,6 +62,8 @@ export const CreateClipBody = zod.object({
   fileSize: zod.number().nullish(),
   mimeType: zod.string().nullish(),
   objectPath: zod.string().nullish(),
+  iv: zod.string().nullish(),
+  encrypted: zod.boolean().nullish(),
 });
 
 /**
@@ -64,7 +74,6 @@ export const DeleteClipParams = zod.object({
 });
 
 /**
- * Returns counts and stats about stored clips
  * @summary Get clipboard usage summary
  */
 export const GetClipSummaryResponse = zod.object({
@@ -81,6 +90,8 @@ export const GetClipSummaryResponse = zod.object({
       fileSize: zod.number().nullish(),
       mimeType: zod.string().nullish(),
       objectPath: zod.string().nullish(),
+      iv: zod.string().nullish(),
+      encrypted: zod.boolean().nullish(),
       createdAt: zod.coerce.date(),
     }),
   ),

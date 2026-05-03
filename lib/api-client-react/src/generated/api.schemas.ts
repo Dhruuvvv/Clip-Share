@@ -9,6 +9,10 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface SaltResponse {
+  salt: string;
+}
+
 export type ClipType = (typeof ClipType)[keyof typeof ClipType];
 
 export const ClipType = {
@@ -25,6 +29,8 @@ export interface Clip {
   fileSize?: number | null;
   mimeType?: string | null;
   objectPath?: string | null;
+  iv?: string | null;
+  encrypted?: boolean | null;
   createdAt: string;
 }
 
@@ -41,6 +47,8 @@ export interface CreateClipBody {
   fileSize?: number | null;
   mimeType?: string | null;
   objectPath?: string | null;
+  iv?: string | null;
+  encrypted?: boolean | null;
 }
 
 export interface ClipSummary {

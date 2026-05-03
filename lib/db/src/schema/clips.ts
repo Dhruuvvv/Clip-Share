@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,6 +10,8 @@ export const clipsTable = pgTable("clips", {
   fileSize: integer("file_size"),
   mimeType: text("mime_type"),
   objectPath: text("object_path"),
+  iv: text("iv"),
+  encrypted: boolean("encrypted").default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

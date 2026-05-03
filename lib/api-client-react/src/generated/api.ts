@@ -25,6 +25,7 @@ import type {
   ListClipsParams,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  SaltResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -37,7 +38,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -113,7 +113,72 @@ export function useHealthCheck<
 }
 
 /**
- * Returns all clipboard items, most recent first
+ * Returns a stable salt used to derive the AES key from a passphrase. Generated once, stored server-side.
+ * @summary Get or create the app-wide encryption salt
+ */
+export const getGetSaltUrl = () => {
+  return `/api/salt`;
+};
+
+export const getSalt = async (options?: RequestInit): Promise<SaltResponse> => {
+  return customFetch<SaltResponse>(getGetSaltUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSaltQueryKey = () => {
+  return [`/api/salt`] as const;
+};
+
+export const getGetSaltQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSalt>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getSalt>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSaltQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalt>>> = ({
+    signal,
+  }) => getSalt({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSalt>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSaltQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSalt>>
+>;
+export type GetSaltQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get or create the app-wide encryption salt
+ */
+
+export function useGetSalt<
+  TData = Awaited<ReturnType<typeof getSalt>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getSalt>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSaltQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List all clipboard items
  */
 export const getListClipsUrl = (params?: ListClipsParams) => {
@@ -378,7 +443,6 @@ export const useDeleteClip = <
 };
 
 /**
- * Returns counts and stats about stored clips
  * @summary Get clipboard usage summary
  */
 export const getGetClipSummaryUrl = () => {
