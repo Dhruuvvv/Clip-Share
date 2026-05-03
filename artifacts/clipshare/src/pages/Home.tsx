@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Trash2, Link as LinkIcon, FileText, Send, Paperclip, Download, Lock, LogOut } from "lucide-react";
+import { Copy, Trash2, Link as LinkIcon, FileText, Send, Paperclip, Download, Lock, LogOut, Pin } from "lucide-react";
 import {
   useListClips,
   getListClipsQueryKey,
   useCreateClip,
   useDeleteClip,
+  useUpdateClip,
   useGetClipSummary,
   getGetClipSummaryQueryKey
 } from "@workspace/api-client-react";
@@ -86,6 +87,7 @@ export default function Home() {
 
   const createClip = useCreateClip();
   const deleteClip = useDeleteClip();
+  const updateClip = useUpdateClip();
 
   const decryptClips = useCallback(async (clips: Clip[]) => {
     if (!cryptoKey) return;
@@ -159,6 +161,39 @@ export default function Home() {
     } catch {
       toast({ title: "Error", description: "Failed to copy.", variant: "destructive" });
     }
+  };
+
+  const handleTogglePin = (id: number, currentlyPinned: boolean) => {
+    setDecryptedClips((prev) => {
+      const updated = prev.map((c) =>
+        c.id === id ? { ...c, pinned: !currentlyPinned } : c
+      );
+      return [
+        ...updated.filter((c) => c.pinned),
+        ...updated.filter((c) => !c.pinned),
+      ];
+    });
+
+    updateClip.mutate(
+      { id, data: { pinned: !currentlyPinned } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListClipsQueryKey() });
+        },
+        onError: () => {
+          setDecryptedClips((prev) => {
+            const reverted = prev.map((c) =>
+              c.id === id ? { ...c, pinned: currentlyPinned } : c
+            );
+            return [
+              ...reverted.filter((c) => c.pinned),
+              ...reverted.filter((c) => !c.pinned),
+            ];
+          });
+          toast({ title: "Error", description: "Failed to update pin.", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const handleDelete = (id: number) => {
@@ -279,7 +314,7 @@ export default function Home() {
             </div>
           ) : (
             clips.map((clip) => (
-              <Card key={clip.id} className="group overflow-hidden transition-all duration-300 hover:shadow-md border-card-border" data-testid={`card-clip-${clip.id}`}>
+              <Card key={clip.id} className={cn("group overflow-hidden transition-all duration-300 hover:shadow-md border-card-border", clip.pinned && "border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/20")} data-testid={`card-clip-${clip.id}`}>
                 <CardContent className="p-0">
                   <div className="p-4 sm:p-5 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-4">
@@ -357,7 +392,22 @@ export default function Home() {
                           Re-enter passphrase
                         </Button>
                       ) : (
-                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleTogglePin(clip.id, clip.pinned)}
+                            className={cn(
+                              "h-8 w-8 transition-colors",
+                              clip.pinned
+                                ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
+                                : "text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 sm:opacity-0 sm:group-hover:opacity-100"
+                            )}
+                            title={clip.pinned ? "Unpin" : "Pin to top"}
+                            data-testid={`button-pin-${clip.id}`}
+                          >
+                            <Pin className={cn("h-4 w-4", clip.pinned && "fill-amber-500")} />
+                          </Button>
                           {clip.type === 'file' && clip.objectPath && (
                             <a
                               href={`/api/storage${clip.objectPath}`}
