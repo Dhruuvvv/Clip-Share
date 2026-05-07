@@ -16,9 +16,16 @@ export function PassphraseProvider({ children }: { children: ReactNode }) {
   });
 
   const unlock = useCallback(async (passphrase: string, salt: string) => {
-    const key = await deriveKey(passphrase, salt);
-    setCryptoKey(key);
-    sessionStorage.setItem("clipshare_unlocked", "1");
+    console.log("[PassphraseProvider] Deriving key...");
+    try {
+      const key = await deriveKey(passphrase, salt);
+      console.log("[PassphraseProvider] Key derived successfully");
+      setCryptoKey(key);
+      sessionStorage.setItem("clipshare_unlocked", "1");
+    } catch (err) {
+      console.error("[PassphraseProvider] Failed to derive key:", err);
+      throw err;
+    }
   }, []);
 
   const lock = useCallback(() => {

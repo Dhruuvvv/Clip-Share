@@ -9,7 +9,14 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { PassphraseProvider } from "@/contexts/passphrase-context";
 import { PassphraseGate } from "@/components/passphrase-gate";
 
+import { setBaseUrl } from "@workspace/api-client-react";
+
 const queryClient = new QueryClient();
+
+// Initialize API base URL from environment variable
+const apiUrl = import.meta.env.VITE_API_URL || "";
+console.log("[App] Initializing with API URL:", apiUrl || "(relative)");
+setBaseUrl(apiUrl);
 
 function Router() {
   return (

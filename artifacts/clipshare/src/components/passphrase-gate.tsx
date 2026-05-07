@@ -22,15 +22,43 @@ export function PassphraseGate({ children }: PassphraseGateProps) {
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passphrase.trim() || !saltData?.salt) return;
+    console.log("[Unlock] handleUnlock triggered");
+    
+    if (!window.isSecureContext || !crypto.subtle) {
+      console.error("[Unlock] Not in a secure context or crypto.subtle is unavailable");
+      toast({
+        title: "Security Error",
+        description: "ClipShare requires a secure context (HTTPS) to decrypt your clips.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!passphrase.trim()) {
+      console.warn("[Unlock] Empty passphrase");
+      return;
+    }
+
+    if (!saltData?.salt) {
+      console.error("[Unlock] Salt data is missing. Is the API reachable?", { saltData, isLoadingSalt });
+      toast({
+        title: "Connection Error",
+        description: "Could not reach the server to retrieve security parameters. Please check your connection.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsUnlocking(true);
+    console.log("[Unlock] Starting decryption process...");
     try {
       await unlock(passphrase.trim(), saltData.salt);
-    } catch {
+      console.log("[Unlock] Decryption successful");
+    } catch (err) {
+      console.error("[Unlock] Decryption failed:", err);
       toast({
         title: "Failed to unlock",
-        description: "Something went wrong. Try again.",
+        description: "Something went wrong. Check your passphrase and try again.",
         variant: "destructive",
       });
     } finally {
