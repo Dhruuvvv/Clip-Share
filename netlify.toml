@@ -1,0 +1,8 @@
+[build]
+  command = "pnpm --filter @workspace/clipshare... run build"
+  publish = "artifacts/clipshare/dist/public"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
