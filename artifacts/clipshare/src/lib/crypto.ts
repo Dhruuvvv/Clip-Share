@@ -1,5 +1,5 @@
-function bufferToBase64(buffer: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+function bufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer as any)));
 }
 
 function base64ToBuffer(base64: string): Uint8Array {
@@ -20,7 +20,7 @@ export async function deriveKey(passphrase: string, saltBase64: string): Promise
   return crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt: base64ToBuffer(saltBase64),
+      salt: base64ToBuffer(saltBase64) as any,
       iterations: 100000,
       hash: "SHA-256",
     },
@@ -38,7 +38,7 @@ export async function encryptText(
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plaintext);
 
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv as any }, key, encoded as any);
 
   return {
     ciphertext: bufferToBase64(ciphertext),
@@ -52,9 +52,9 @@ export async function decryptText(
   key: CryptoKey
 ): Promise<string> {
   const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: base64ToBuffer(ivBase64) },
+    { name: "AES-GCM", iv: base64ToBuffer(ivBase64) as any },
     key,
-    base64ToBuffer(ciphertextBase64)
+    base64ToBuffer(ciphertextBase64) as any
   );
 
   return new TextDecoder().decode(decrypted);

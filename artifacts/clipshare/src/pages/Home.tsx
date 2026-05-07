@@ -182,7 +182,7 @@ function ClipCard({ clip, searchQuery, onCopy, onDelete, onTogglePin, onLock, de
                 {clip.type === "file" ? "File" : clip.type === "link" ? "Link" : "Text"}
               </Badge>
               {clip.encrypted && !clip.decryptFailed && (
-                <Lock className="w-3 h-3 text-emerald-500" title="End-to-end encrypted" />
+                <Lock className="w-3 h-3 text-emerald-500" />
               )}
             </div>
 
@@ -299,7 +299,7 @@ export default function Home() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const { uploadFile, isUploading } = useUpload({
-    onSuccess: (response) => {
+    onSuccess: (response: any) => {
       const file = fileInputRef.current?.files?.[0];
       if (!file) return;
       createClip.mutate(
@@ -324,7 +324,7 @@ export default function Home() {
         }
       );
     },
-    onError: (error) =>
+    onError: (error: Error) =>
       toast({ title: "Error", description: error.message || "Failed to upload file.", variant: "destructive" }),
   });
 
