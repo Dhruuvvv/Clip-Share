@@ -94,6 +94,7 @@ interface ClipCardProps {
   clip: DecryptedClip;
   searchQuery: string;
   onCopy: (content: string) => void;
+  onCopyImage: (objectPath: string) => Promise<void>;
   onDelete: (id: number) => void;
   onTogglePin: (id: number, pinned: boolean) => void;
   onLock: () => void;
@@ -101,7 +102,7 @@ interface ClipCardProps {
   dragHandle?: React.ReactNode;
 }
 
-function ClipCard({ clip, searchQuery, onCopy, onDelete, onTogglePin, onLock, deleteIsPending, dragHandle }: ClipCardProps) {
+function ClipCard({ clip, searchQuery, onCopy, onCopyImage, onDelete, onTogglePin, onLock, deleteIsPending, dragHandle }: ClipCardProps) {
   return (
     <Card
       className={cn(
@@ -222,6 +223,18 @@ function ClipCard({ clip, searchQuery, onCopy, onDelete, onTogglePin, onLock, de
                   >
                     <Download className="h-4 w-4" />
                   </a>
+                )}
+                {clip.type === "file" && clip.mimeType?.startsWith("image/") && clip.objectPath && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onCopyImage(clip.objectPath!)}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    title="Copy image to clipboard"
+                    data-testid={`button-copy-image-${clip.id}`}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 )}
                 {clip.type !== "file" && (
                   <Button
@@ -412,7 +425,33 @@ export default function Home() {
       await navigator.clipboard.writeText(content);
       toast({ description: "Copied to clipboard", duration: 2000 });
     } catch {
-      toast({ title: "Error", description: "Failed to copy.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to copy text.", variant: "destructive" });
+    }
+  };
+
+  const handleCopyImage = async (objectPath: string) => {
+    try {
+      const response = await fetch(`/api/storage${objectPath}`);
+      if (!response.ok) throw new Error("Failed to fetch image");
+      const blob = await response.blob();
+      
+      // Most browsers support writing PNG to clipboard. 
+      // If it's JPEG, we might need to draw it to a canvas and convert to PNG for some browsers,
+      // but modern Chrome/Edge support JPEG too.
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+      
+      toast({ description: "Image copied to clipboard", duration: 2000 });
+    } catch (err) {
+      console.error("Failed to copy image:", err);
+      toast({ 
+        title: "Copy Failed", 
+        description: "Browser does not support direct image copying for this format.", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -490,6 +529,7 @@ export default function Home() {
     clip,
     searchQuery,
     onCopy: handleCopy,
+    onCopyImage: handleCopyImage,
     onDelete: handleDelete,
     onTogglePin: handleTogglePin,
     onLock: lock,

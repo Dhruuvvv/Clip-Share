@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { 
   useCreateClip, 
@@ -31,6 +31,9 @@ export default function ShareHandler() {
   const createClip = useCreateClip();
   const [status, setStatus] = useState<"loading" | "processing" | "success" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  
+  // Ref to prevent double processing in React strict mode or race conditions
+  const processingRef = useRef(false);
 
   const finishShare = useCallback((message: string) => {
     setStatus("success");
@@ -49,33 +52,40 @@ export default function ShareHandler() {
 
   const { uploadFile } = useUpload({
     onSuccess: (response: any) => {
-      // In use-upload.ts, onSuccess only receives the response.
-      // We'll need to handle the clip creation here.
-      // But wait, where is the file? 
-      // We'll use the uploadFile return value instead for better control.
+      // Handled via the promise return in uploadFile
     },
     onError: (err: Error) => handleError(err.message || "Failed to upload file."),
   });
 
   useEffect(() => {
     async function processShare() {
+      // 1. Safety Checks
       if (!cryptoKey) {
-        // PassphraseGate will handle the prompt, we just wait
+        console.log("[ShareHandler] Waiting for cryptoKey...");
+        return;
+      }
+      
+      if (processingRef.current) {
+        console.log("[ShareHandler] Already processing, skipping duplicate call.");
         return;
       }
 
+      console.log("[ShareHandler] Starting share processing...");
+      processingRef.current = true;
       setStatus("processing");
 
       try {
-        // 1. Check for URL parameters (simple text/url sharing)
         const params = new URLSearchParams(window.location.search);
         const title = params.get("title");
         const text = params.get("text");
         const url = params.get("url");
+        const isFromServiceWorker = params.get("received") === "true";
 
+        // 2. Handle URL parameters (Legacy/Direct mode)
+        // Only use URL params if NOT coming from the service worker interceptor
         const sharedText = text || url || title;
-
-        if (sharedText && !params.get("received")) {
+        if (sharedText && !isFromServiceWorker) {
+          console.log("[ShareHandler] Processing direct URL share:", { type: isUrl(sharedText) ? "link" : "text" });
           const type = isUrl(sharedText) ? "link" : "text";
           const { ciphertext, iv } = await encryptText(sharedText, cryptoKey);
           
@@ -89,35 +99,44 @@ export default function ShareHandler() {
           return;
         }
 
-        // 2. Check IndexedDB for files/text (intercepted by SW)
+        // 3. Handle Service Worker Data (IndexedDB mode)
+        console.log("[ShareHandler] Checking IndexedDB for shared data...");
         const dbRequest = indexedDB.open('clipshare-share-db', 1);
+        
         dbRequest.onsuccess = async () => {
           const db = dbRequest.result;
           if (!db.objectStoreNames.contains('incoming')) {
+            console.warn("[ShareHandler] No 'incoming' object store found.");
             handleError("No shared content found.");
             return;
           }
 
-          const tx = db.transaction('incoming', 'readonly');
+          const tx = db.transaction('incoming', 'readwrite');
           const store = tx.objectStore('incoming');
           const getRequest = store.get('latest');
 
           getRequest.onsuccess = async () => {
             const data = getRequest.result as SharedData | undefined;
             if (!data) {
+              console.log("[ShareHandler] No shared data found in IDB (likely already processed).");
+              // If we are on /share?received=true but no data is found, 
+              // it means either it was already processed or something went wrong.
+              // We'll redirect home if we've been here long enough without data.
               handleError("No shared content found in storage.");
               return;
             }
 
-            // Clear the data after reading
-            const clearTx = db.transaction('incoming', 'readwrite');
-            clearTx.objectStore('incoming').delete('latest');
+            // CRITICAL: Clear the data IMMEDIATELY to prevent double processing 
+            // if another instance of the effect runs before we finish.
+            store.delete('latest');
+            console.log("[ShareHandler] Shared data retrieved and cleared from IDB.");
 
             // Handle files first if present
             if (data.files && data.files.length > 0) {
-              const file = data.files[0];
-              const response = await uploadFile(file);
+              console.log(`[ShareHandler] Processing ${data.files.length} shared file(s)...`);
+              const file = data.files[0]; // For now, process the first file
               
+              const response = await uploadFile(file);
               if (response) {
                 createClip.mutate(
                   {
@@ -142,6 +161,7 @@ export default function ShareHandler() {
             // Handle text from IDB
             const idbText = data.text || data.url || data.title;
             if (idbText) {
+              console.log("[ShareHandler] Processing shared text from IDB.");
               const type = isUrl(idbText) ? "link" : "text";
               const { ciphertext, iv } = await encryptText(idbText, cryptoKey);
               createClip.mutate(
@@ -161,6 +181,7 @@ export default function ShareHandler() {
         dbRequest.onerror = () => handleError("Failed to access share storage.");
 
       } catch (err) {
+        console.error("[ShareHandler] Unexpected error:", err);
         handleError("An unexpected error occurred while processing share.");
       }
     }
