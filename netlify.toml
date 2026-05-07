@@ -1,7 +1,8 @@
 [build]
-  command = "pnpm --filter @workspace/clipshare... run build"
+  command = "pnpm --filter clipshare build"
   publish = "artifacts/clipshare/dist/public"
 
+# Important for SPA (prevents 404 on refresh or direct links)
 [[redirects]]
   from = "/*"
   to = "/index.html"
