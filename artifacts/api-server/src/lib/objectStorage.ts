@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from "cloudinary";
+import { v2 as cloudinary, ConfigOptions } from "cloudinary";
 import { randomUUID } from "crypto";
 import { Readable } from "stream";
 import https from "https";
@@ -17,11 +17,15 @@ export class ObjectStorageService {
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET,
-    });
+    } as ConfigOptions);
   }
 
-  async getObjectEntityUploadURL(): Promise<string> {
-    const objectId = randomUUID();
+  /**
+   * Encodes the resource type into the objectId to ensure correct URL generation later.
+   * Format: resourceType:uuid
+   */
+  async getObjectEntityUploadURL(resourceType: string = "raw"): Promise<string> {
+    const objectId = `${resourceType}:${randomUUID()}`;
     return `/api/storage/uploads/${objectId}`;
   }
 
@@ -39,12 +43,23 @@ export class ObjectStorageService {
     }
   }
 
-  async saveObject(objectId: string, buffer: Buffer): Promise<void> {
+  private parseObjectId(compositeId: string): { resourceType: any; actualId: string } {
+    if (compositeId.includes(":")) {
+      const [resourceType, ...idParts] = compositeId.split(":");
+      return { resourceType, actualId: idParts.join(":") };
+    }
+    // Fallback for legacy IDs
+    return { resourceType: "image", actualId: compositeId };
+  }
+
+  async saveObject(compositeId: string, buffer: Buffer): Promise<void> {
+    const { resourceType, actualId } = this.parseObjectId(compositeId);
+    
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          public_id: objectId,
-          resource_type: "auto", // Automatically detect if it's an image, video, or raw file
+          public_id: actualId,
+          resource_type: resourceType,
           folder: "clipshare",
         },
         (error, result) => {
@@ -65,26 +80,20 @@ export class ObjectStorageService {
   }
 
   /**
-   * Returns the secure URL for the given objectId.
-   * Since we store files in the 'clipshare' folder, we prepend it.
+   * Returns the secure URL for the given compositeId.
    */
-  async getObjectURL(objectId: string): Promise<string> {
-    // We use 'resource_type: auto' during upload, but Cloudinary usually needs to know 
-    // the resource type for URL generation if it's not an image.
-    // However, the secure_url returned during upload is the best way to get it.
-    // For simplicity, we can use the 'search' API or just assume the URL structure.
-    // A better way is to store the full URL in the database when the file is saved.
+  async getObjectURL(compositeId: string): Promise<string> {
+    const { resourceType, actualId } = this.parseObjectId(compositeId);
     
-    // For now, let's use the explicit URL construction or the 'v2.url' helper.
-    // Note: Cloudinary URLs for 'raw' files have a slightly different structure.
-    return cloudinary.url(`clipshare/${objectId}`, {
+    // Explicitly using the secure_url pattern or the SDK helper with the right resource_type
+    return cloudinary.url(`clipshare/${actualId}`, {
       secure: true,
-      resource_type: "auto",
+      resource_type: resourceType,
     });
   }
 
-  async getObjectFileStream(objectId: string): Promise<NodeJS.ReadableStream> {
-    const url = await this.getObjectURL(objectId);
+  async getObjectFileStream(compositeId: string): Promise<NodeJS.ReadableStream> {
+    const url = await this.getObjectURL(compositeId);
     return new Promise((resolve, reject) => {
       https.get(url, (res) => {
         if (res.statusCode === 200) {
@@ -98,14 +107,15 @@ export class ObjectStorageService {
     });
   }
 
-  async getObjectMetadata(objectId: string) {
+  async getObjectMetadata(compositeId: string) {
+    const { resourceType, actualId } = this.parseObjectId(compositeId);
     try {
-      const result = await cloudinary.api.resource(`clipshare/${objectId}`, {
-        resource_type: "auto",
+      const result = await cloudinary.api.resource(`clipshare/${actualId}`, {
+        resource_type: resourceType,
       });
       return {
         size: result.bytes,
-        contentType: result.format ? `image/${result.format}` : "application/octet-stream",
+        contentType: result.format ? `${resourceType}/${result.format}` : "application/octet-stream",
       };
     } catch (error) {
       throw new ObjectNotFoundError();

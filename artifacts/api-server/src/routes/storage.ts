@@ -21,7 +21,16 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
 
   try {
     const { name, size, contentType } = parsed.data;
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    
+    // Determine Cloudinary resource type
+    let resourceType = "raw";
+    if (contentType.startsWith("image/")) {
+      resourceType = "image";
+    } else if (contentType.startsWith("video/") || contentType.startsWith("audio/")) {
+      resourceType = "video";
+    }
+
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL(resourceType);
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
     res.json(
