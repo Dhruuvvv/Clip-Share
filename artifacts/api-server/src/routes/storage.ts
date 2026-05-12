@@ -76,11 +76,16 @@ router.put("/storage/uploads/:objectId", express.raw({ limit: "50mb", type: "*/*
 router.get("/storage/objects/:objectId", async (req: Request, res: Response) => {
   try {
     const { objectId } = req.params;
+    const { filename } = req.query;
+
     if (typeof objectId !== "string") {
       res.status(400).json({ error: "Invalid object ID" });
       return;
     }
-    const url = await objectStorageService.getObjectURL(objectId);
+    const url = await objectStorageService.getObjectURL(
+      objectId, 
+      typeof filename === "string" ? filename : undefined
+    );
     res.redirect(url);
   } catch (error) {
     if (error instanceof ObjectNotFoundError) {

@@ -81,15 +81,36 @@ export class ObjectStorageService {
 
   /**
    * Returns the secure URL for the given compositeId.
+   * Supports optional forced download with a specific filename.
    */
-  async getObjectURL(compositeId: string): Promise<string> {
+  async getObjectURL(compositeId: string, filename?: string): Promise<string> {
     const { resourceType, actualId } = this.parseObjectId(compositeId);
     
-    // Explicitly using the secure_url pattern or the SDK helper with the right resource_type
-    return cloudinary.url(`clipshare/${actualId}`, {
+    const options: any = {
       secure: true,
       resource_type: resourceType,
-    });
+    };
+
+    if (filename) {
+      // Use fl_attachment to force download and set filename
+      options.flags = "attachment";
+      // Note: Cloudinary doesn't directly support setting the download filename 
+      // via the URL generation helper in all SDK versions easily without custom transformations,
+      // but fl_attachment with a public_id that includes the filename works,
+      // or using the 'dpr_auto' etc. 
+      // Actually, appending the filename to the URL is the most reliable way.
+    }
+
+    let url = cloudinary.url(`clipshare/${actualId}`, options);
+    
+    if (filename) {
+      // Add the filename as a suffix to the URL path to help the browser
+      // Cloudinary ignores trailing path segments after the public_id
+      const cleanFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+      url = `${url}/${cleanFilename}`;
+    }
+
+    return url;
   }
 
   async getObjectFileStream(compositeId: string): Promise<NodeJS.ReadableStream> {

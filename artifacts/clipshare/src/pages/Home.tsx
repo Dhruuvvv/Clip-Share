@@ -216,7 +216,7 @@ function ClipCard({ clip, searchQuery, onCopy, onCopyImage, onDelete, onTogglePi
                 </Button>
                 {clip.type === "file" && clip.objectPath && (
                   <a
-                    href={`/api/storage${clip.objectPath}`}
+                    href={`/api/storage${clip.objectPath}${clip.fileName ? `?filename=${encodeURIComponent(clip.fileName)}` : ""}`}
                     download={clip.fileName || clip.displayContent}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground h-8 w-8 text-muted-foreground"
                     title="Download file"
@@ -433,11 +433,32 @@ export default function Home() {
     try {
       const response = await fetch(`/api/storage${objectPath}`);
       if (!response.ok) throw new Error("Failed to fetch image");
-      const blob = await response.blob();
+      let blob = await response.blob();
       
-      // Most browsers support writing PNG to clipboard. 
-      // If it's JPEG, we might need to draw it to a canvas and convert to PNG for some browsers,
-      // but modern Chrome/Edge support JPEG too.
+      // Browser Async Clipboard API generally only supports image/png.
+      // Convert to PNG if it's not already to ensure compatibility.
+      if (blob.type !== "image/png") {
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+        
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Could not get canvas context");
+        ctx.drawImage(img, 0, 0);
+        
+        const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+        URL.revokeObjectURL(url);
+        if (!pngBlob) throw new Error("Failed to convert image to PNG");
+        blob = pngBlob;
+      }
+
       await navigator.clipboard.write([
         new ClipboardItem({
           [blob.type]: blob
@@ -449,7 +470,7 @@ export default function Home() {
       console.error("Failed to copy image:", err);
       toast({ 
         title: "Copy Failed", 
-        description: "Browser does not support direct image copying for this format.", 
+        description: "Your browser might not support copying this image format.", 
         variant: "destructive" 
       });
     }
