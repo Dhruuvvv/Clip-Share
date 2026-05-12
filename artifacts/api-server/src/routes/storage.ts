@@ -44,6 +44,10 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
 router.put("/storage/uploads/:objectId", express.raw({ limit: "50mb", type: "*/*" }), async (req: Request, res: Response) => {
   try {
     const { objectId } = req.params;
+    if (typeof objectId !== "string") {
+      res.status(400).json({ error: "Invalid object ID" });
+      return;
+    }
     if (!Buffer.isBuffer(req.body)) {
       res.status(400).json({ error: "Invalid file data" });
       return;
@@ -58,16 +62,17 @@ router.put("/storage/uploads/:objectId", express.raw({ limit: "50mb", type: "*/*
 
 /**
  * GET /storage/objects/*
+ * Redirect to the permanent Cloudinary URL
  */
 router.get("/storage/objects/:objectId", async (req: Request, res: Response) => {
   try {
     const { objectId } = req.params;
-    const stream = await objectStorageService.getObjectFileStream(objectId);
-    const metadata = await objectStorageService.getObjectMetadata(objectId);
-
-    res.setHeader("Content-Type", metadata.contentType);
-    res.setHeader("Content-Length", metadata.size);
-    (stream as any).pipe(res);
+    if (typeof objectId !== "string") {
+      res.status(400).json({ error: "Invalid object ID" });
+      return;
+    }
+    const url = await objectStorageService.getObjectURL(objectId);
+    res.redirect(url);
   } catch (error) {
     if (error instanceof ObjectNotFoundError) {
       res.status(404).json({ error: "Object not found" });
