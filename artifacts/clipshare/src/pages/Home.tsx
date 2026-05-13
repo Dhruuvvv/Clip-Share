@@ -324,6 +324,7 @@ export default function Home() {
             fileSize: file.size,
             mimeType: file.type,
             objectPath: response.objectPath,
+            resourceType: response.resourceType,
           },
         },
         {

@@ -10,6 +10,7 @@ interface UploadMetadata {
 interface UploadResponse {
   uploadURL: string;
   objectPath: string;
+  resourceType: string;
   metadata: UploadMetadata;
 }
 

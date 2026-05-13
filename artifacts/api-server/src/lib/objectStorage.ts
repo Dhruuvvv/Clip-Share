@@ -12,6 +12,8 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
+export type CloudinaryResourceType = "image" | "video" | "raw";
+
 export class ObjectStorageService {
   constructor() {
     cloudinary.config({
@@ -22,53 +24,32 @@ export class ObjectStorageService {
   }
 
   /**
-   * Encodes the resource type into the objectId to ensure correct URL generation later.
-   * Format: resourceType:uuid
+   * Generates a new unique object ID.
    */
-  async getObjectEntityUploadURL(resourceType: string = "raw"): Promise<string> {
-    const objectId = `${resourceType}:${randomUUID()}`;
-    return `/api/storage/uploads/${objectId}`;
+  generateObjectId(): string {
+    return randomUUID();
   }
 
-  normalizeObjectEntityPath(uploadURL: string): string {
-    try {
-      const url = uploadURL.startsWith("http") 
-        ? new URL(uploadURL) 
-        : new URL(uploadURL, "http://localhost");
-      
-      const parts = url.pathname.split("/");
-      const objectId = parts[parts.length - 1];
-      return `/objects/${objectId}`;
-    } catch {
-      return uploadURL;
-    }
+  /**
+   * Normalizes the object path for DB storage.
+   */
+  normalizeObjectPath(objectId: string): string {
+    return `/objects/${objectId}`;
   }
 
-  private parseObjectId(compositeId: string): { resourceType: "image" | "video" | "raw"; actualId: string } {
-    if (compositeId.includes(":")) {
-      const [resourceType, ...idParts] = compositeId.split(":");
-      return { 
-        resourceType: (resourceType as any) || "raw", 
-        actualId: idParts.join(":") 
-      };
-    }
-    // Fallback for legacy IDs - assume raw as it's safer for binary preservation
-    return { resourceType: "raw", actualId: compositeId };
-  }
-
-  async saveObject(compositeId: string, buffer: Buffer): Promise<void> {
-    const { resourceType, actualId } = this.parseObjectId(compositeId);
-    
+  /**
+   * Saves a file to Cloudinary.
+   */
+  async saveObject(resourceType: CloudinaryResourceType, objectId: string, buffer: Buffer): Promise<void> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          public_id: actualId,
+          public_id: objectId,
           resource_type: resourceType,
           folder: "clipshare",
         },
         (error) => {
           if (error) {
-            console.error("Cloudinary upload error:", error);
             reject(error);
           } else {
             resolve();
@@ -84,31 +65,28 @@ export class ObjectStorageService {
   }
 
   /**
-   * Returns the secure URL for the given compositeId.
+   * Returns the secure delivery URL from Cloudinary.
    */
-  async getObjectURL(compositeId: string): Promise<string> {
-    const { resourceType, actualId } = this.parseObjectId(compositeId);
-    
-    return cloudinary.url(`clipshare/${actualId}`, {
+  async getObjectURL(resourceType: CloudinaryResourceType, objectId: string): Promise<string> {
+    return cloudinary.url(`clipshare/${objectId}`, {
       secure: true,
       resource_type: resourceType,
     });
   }
 
-  async getObjectFileStream(compositeId: string): Promise<NodeJS.ReadableStream> {
-    const url = await this.getObjectURL(compositeId);
-    console.log(`[ObjectStorage] Fetching stream for ${compositeId} from: ${url}`);
+  /**
+   * Streams the file from Cloudinary.
+   */
+  async getObjectFileStream(resourceType: CloudinaryResourceType, objectId: string): Promise<NodeJS.ReadableStream> {
+    const url = await this.getObjectURL(resourceType, objectId);
     
     const fetchWithRedirects = (targetUrl: string): Promise<NodeJS.ReadableStream> => {
       return new Promise((resolve, reject) => {
         https.get(targetUrl, (res) => {
-          console.log(`[ObjectStorage] Cloudinary response: ${res.statusCode} for ${targetUrl}`);
-          
           if (res.statusCode === 200) {
             resolve(res);
           } else if (res.statusCode === 301 || res.statusCode === 302) {
             if (res.headers.location) {
-              console.log(`[ObjectStorage] Following redirect to: ${res.headers.location}`);
               fetchWithRedirects(res.headers.location).then(resolve).catch(reject);
             } else {
               reject(new Error("Redirect location missing"));
@@ -118,26 +96,21 @@ export class ObjectStorageService {
           } else {
             reject(new Error(`Failed to fetch from Cloudinary: ${res.statusCode}`));
           }
-        }).on("error", (err) => {
-          console.error(`[ObjectStorage] HTTPS error: ${err.message}`);
-          reject(err);
-        });
+        }).on("error", reject);
       });
     };
 
     return fetchWithRedirects(url);
   }
 
-  async getObjectMetadata(compositeId: string) {
-    const { resourceType, actualId } = this.parseObjectId(compositeId);
-    console.log(`[ObjectStorage] Fetching metadata for ${compositeId} (${resourceType})`);
-    
+  /**
+   * Fetches metadata for the object from Cloudinary Admin API.
+   */
+  async getObjectMetadata(resourceType: CloudinaryResourceType, objectId: string) {
     try {
-      const result = await cloudinary.api.resource(`clipshare/${actualId}`, {
+      const result = await cloudinary.api.resource(`clipshare/${objectId}`, {
         resource_type: resourceType,
       });
-      
-      console.log(`[ObjectStorage] Cloudinary metadata result: format=${result.format}, bytes=${result.bytes}`);
       
       const format = result.format?.toLowerCase?.() || "";
       let contentType = "application/octet-stream";
@@ -149,7 +122,6 @@ export class ObjectStorageService {
       } else if (result.resource_type === "video") {
         contentType = `video/${format || "mp4"}`;
       } else {
-        // Resource type is "raw" or others
         const mimeMap: Record<string, string> = {
           'pdf': 'application/pdf',
           'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -188,7 +160,6 @@ export class ObjectStorageService {
         format,
       };
     } catch (error) {
-      console.error("Cloudinary metadata error:", error);
       throw new ObjectNotFoundError();
     }
   }

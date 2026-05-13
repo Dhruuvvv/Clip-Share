@@ -147,6 +147,7 @@ export default function ShareHandler() {
                       fileSize: file.size,
                       mimeType: file.type,
                       objectPath: response.objectPath,
+                      resourceType: response.resourceType,
                     },
                   },
                   {

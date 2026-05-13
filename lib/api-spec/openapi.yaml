@@ -206,6 +206,9 @@ components:
         encrypted:
           type: boolean
           nullable: true
+        resourceType:
+          type: string
+          nullable: true
         pinned:
           type: boolean
         createdAt:
@@ -256,6 +259,9 @@ components:
           nullable: true
         encrypted:
           type: boolean
+          nullable: true
+        resourceType:
+          type: string
           nullable: true
       required:
         - content
@@ -312,6 +318,9 @@ components:
           type: string
         objectPath:
           type: string
+        resourceType:
+          type: string
       required:
         - uploadURL
         - objectPath
+        - resourceType

@@ -45,6 +45,7 @@ export const ListClipsResponse = zod.object({
       objectPath: zod.string().nullish(),
       iv: zod.string().nullish(),
       encrypted: zod.boolean().nullish(),
+      resourceType: zod.string().nullish(),
       pinned: zod.boolean(),
       createdAt: zod.coerce.date(),
     }),
@@ -65,6 +66,7 @@ export const CreateClipBody = zod.object({
   objectPath: zod.string().nullish(),
   iv: zod.string().nullish(),
   encrypted: zod.boolean().nullish(),
+  resourceType: zod.string().nullish(),
 });
 
 /**
@@ -88,6 +90,7 @@ export const UpdateClipResponse = zod.object({
   objectPath: zod.string().nullish(),
   iv: zod.string().nullish(),
   encrypted: zod.boolean().nullish(),
+  resourceType: zod.string().nullish(),
   pinned: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -118,6 +121,7 @@ export const GetClipSummaryResponse = zod.object({
       objectPath: zod.string().nullish(),
       iv: zod.string().nullish(),
       encrypted: zod.boolean().nullish(),
+      resourceType: zod.string().nullish(),
       pinned: zod.boolean(),
       createdAt: zod.coerce.date(),
     }),
@@ -136,4 +140,5 @@ export const RequestUploadUrlBody = zod.object({
 export const RequestUploadUrlResponse = zod.object({
   uploadURL: zod.string(),
   objectPath: zod.string(),
+  resourceType: zod.string(),
 });
