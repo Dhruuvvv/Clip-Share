@@ -1,3 +1,4 @@
+//objectStorage.ts
 import { v2 as cloudinary, ConfigOptions } from "cloudinary";
 import { randomUUID } from "crypto";
 import { Readable } from "stream";
@@ -43,13 +44,16 @@ export class ObjectStorageService {
     }
   }
 
-  private parseObjectId(compositeId: string): { resourceType: any; actualId: string } {
+  private parseObjectId(compositeId: string): { resourceType: "image" | "video" | "raw"; actualId: string } {
     if (compositeId.includes(":")) {
       const [resourceType, ...idParts] = compositeId.split(":");
-      return { resourceType, actualId: idParts.join(":") };
+      return { 
+        resourceType: (resourceType as any) || "raw", 
+        actualId: idParts.join(":") 
+      };
     }
-    // Fallback for legacy IDs
-    return { resourceType: "image", actualId: compositeId };
+    // Fallback for legacy IDs - assume raw as it's safer for binary preservation
+    return { resourceType: "raw", actualId: compositeId };
   }
 
   async saveObject(compositeId: string, buffer: Buffer): Promise<void> {
@@ -62,7 +66,7 @@ export class ObjectStorageService {
           resource_type: resourceType,
           folder: "clipshare",
         },
-        (error, result) => {
+        (error) => {
           if (error) {
             console.error("Cloudinary upload error:", error);
             reject(error);
@@ -81,51 +85,40 @@ export class ObjectStorageService {
 
   /**
    * Returns the secure URL for the given compositeId.
-   * Supports optional forced download with a specific filename.
    */
-  async getObjectURL(compositeId: string, filename?: string): Promise<string> {
+  async getObjectURL(compositeId: string): Promise<string> {
     const { resourceType, actualId } = this.parseObjectId(compositeId);
     
-    const options: any = {
+    return cloudinary.url(`clipshare/${actualId}`, {
       secure: true,
       resource_type: resourceType,
-    };
-
-    if (filename) {
-      // Use fl_attachment to force download and set filename
-      options.flags = "attachment";
-      // Note: Cloudinary doesn't directly support setting the download filename 
-      // via the URL generation helper in all SDK versions easily without custom transformations,
-      // but fl_attachment with a public_id that includes the filename works,
-      // or using the 'dpr_auto' etc. 
-      // Actually, appending the filename to the URL is the most reliable way.
-    }
-
-    let url = cloudinary.url(`clipshare/${actualId}`, options);
-    
-    if (filename) {
-      // Add the filename as a suffix to the URL path to help the browser
-      // Cloudinary ignores trailing path segments after the public_id
-      const cleanFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-      url = `${url}/${cleanFilename}`;
-    }
-
-    return url;
+    });
   }
 
   async getObjectFileStream(compositeId: string): Promise<NodeJS.ReadableStream> {
     const url = await this.getObjectURL(compositeId);
-    return new Promise((resolve, reject) => {
-      https.get(url, (res) => {
-        if (res.statusCode === 200) {
-          resolve(res);
-        } else if (res.statusCode === 404) {
-          reject(new ObjectNotFoundError());
-        } else {
-          reject(new Error(`Failed to fetch from Cloudinary: ${res.statusCode}`));
-        }
-      }).on("error", reject);
-    });
+    
+    const fetchWithRedirects = (targetUrl: string): Promise<NodeJS.ReadableStream> => {
+      return new Promise((resolve, reject) => {
+        https.get(targetUrl, (res) => {
+          if (res.statusCode === 200) {
+            resolve(res);
+          } else if (res.statusCode === 301 || res.statusCode === 302) {
+            if (res.headers.location) {
+              fetchWithRedirects(res.headers.location).then(resolve).catch(reject);
+            } else {
+              reject(new Error("Redirect location missing"));
+            }
+          } else if (res.statusCode === 404) {
+            reject(new ObjectNotFoundError());
+          } else {
+            reject(new Error(`Failed to fetch from Cloudinary: ${res.statusCode}`));
+          }
+        }).on("error", reject);
+      });
+    };
+
+    return fetchWithRedirects(url);
   }
 
   async getObjectMetadata(compositeId: string) {
@@ -134,11 +127,57 @@ export class ObjectStorageService {
       const result = await cloudinary.api.resource(`clipshare/${actualId}`, {
         resource_type: resourceType,
       });
+      
+      const format = result.format?.toLowerCase?.() || "";
+      let contentType = "application/octet-stream";
+
+      if (result.resource_type === "image") {
+        let imageFormat = format || "jpeg";
+        if (imageFormat === "jpg") imageFormat = "jpeg";
+        contentType = `image/${imageFormat}`;
+      } else if (result.resource_type === "video") {
+        contentType = `video/${format || "mp4"}`;
+      } else {
+        // Resource type is "raw" or others
+        const mimeMap: Record<string, string> = {
+          'pdf': 'application/pdf',
+          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'doc': 'application/msword',
+          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'xls': 'application/vnd.ms-excel',
+          'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'ppt': 'application/ms-powerpoint',
+          'csv': 'text/csv',
+          'txt': 'text/plain',
+          'zip': 'application/zip',
+          'rar': 'application/x-rar-compressed',
+          '7z': 'application/x-7z-compressed',
+          'json': 'application/json',
+          'mp3': 'audio/mpeg',
+          'wav': 'audio/wav',
+          'ogg': 'audio/ogg',
+          'png': 'image/png',
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'gif': 'image/gif',
+          'webp': 'image/webp',
+          'svg': 'image/svg+xml',
+          'mp4': 'video/mp4',
+          'webm': 'video/webm',
+        };
+        
+        if (format && mimeMap[format]) {
+          contentType = mimeMap[format];
+        }
+      }
+
       return {
         size: result.bytes,
-        contentType: result.format ? `${resourceType}/${result.format}` : "application/octet-stream",
+        contentType,
+        format,
       };
     } catch (error) {
+      console.error("Cloudinary metadata error:", error);
       throw new ObjectNotFoundError();
     }
   }
