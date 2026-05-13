@@ -92,10 +92,30 @@ router.get("/storage/objects/:objectId", async (req: Request, res: Response) => 
       .where(eq(clipsTable.objectPath, `/objects/${objectId}`))
       .limit(1);
 
-    // Fetch Cloudinary metadata and the file stream in parallel
+    // Detect correct Cloudinary resource type from MIME type
+    const mimeType = clip?.mimeType || "";
+
+    let resourceType: "image" | "video" | "raw" = "raw";
+
+    if (mimeType.startsWith("image/")) {
+      resourceType = "image";
+    } else if (
+      mimeType.startsWith("video/") ||
+      mimeType.startsWith("audio/")
+    ) {
+      resourceType = "video";
+    }
+
+    // Build composite object ID
+    const compositeObjectId = `${resourceType}:${objectId}`;
+
+    // Fetch Cloudinary metadata and stream
     const [metadata, stream] = await Promise.all([
-      objectStorageService.getObjectMetadata(objectId).catch(() => null),
-      objectStorageService.getObjectFileStream(objectId)
+      objectStorageService
+        .getObjectMetadata(compositeObjectId)
+        .catch(() => null),
+
+      objectStorageService.getObjectFileStream(compositeObjectId),
     ]);
 
     // MIME Type Resolution Logic:
