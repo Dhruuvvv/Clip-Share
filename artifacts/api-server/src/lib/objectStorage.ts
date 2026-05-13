@@ -53,7 +53,7 @@ export class ObjectStorageService {
       };
     }
     // Fallback for legacy IDs - assume raw as it's safer for binary preservation
-    return { resourceType: "raw", actualId: compositeId };
+    return { resourceType: "image", actualId: compositeId };
   }
 
   async saveObject(compositeId: string, buffer: Buffer): Promise<void> {
