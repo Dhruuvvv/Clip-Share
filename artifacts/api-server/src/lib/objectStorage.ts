@@ -97,14 +97,18 @@ export class ObjectStorageService {
 
   async getObjectFileStream(compositeId: string): Promise<NodeJS.ReadableStream> {
     const url = await this.getObjectURL(compositeId);
+    console.log(`[ObjectStorage] Fetching stream for ${compositeId} from: ${url}`);
     
     const fetchWithRedirects = (targetUrl: string): Promise<NodeJS.ReadableStream> => {
       return new Promise((resolve, reject) => {
         https.get(targetUrl, (res) => {
+          console.log(`[ObjectStorage] Cloudinary response: ${res.statusCode} for ${targetUrl}`);
+          
           if (res.statusCode === 200) {
             resolve(res);
           } else if (res.statusCode === 301 || res.statusCode === 302) {
             if (res.headers.location) {
+              console.log(`[ObjectStorage] Following redirect to: ${res.headers.location}`);
               fetchWithRedirects(res.headers.location).then(resolve).catch(reject);
             } else {
               reject(new Error("Redirect location missing"));
@@ -114,7 +118,10 @@ export class ObjectStorageService {
           } else {
             reject(new Error(`Failed to fetch from Cloudinary: ${res.statusCode}`));
           }
-        }).on("error", reject);
+        }).on("error", (err) => {
+          console.error(`[ObjectStorage] HTTPS error: ${err.message}`);
+          reject(err);
+        });
       });
     };
 
@@ -123,10 +130,14 @@ export class ObjectStorageService {
 
   async getObjectMetadata(compositeId: string) {
     const { resourceType, actualId } = this.parseObjectId(compositeId);
+    console.log(`[ObjectStorage] Fetching metadata for ${compositeId} (${resourceType})`);
+    
     try {
       const result = await cloudinary.api.resource(`clipshare/${actualId}`, {
         resource_type: resourceType,
       });
+      
+      console.log(`[ObjectStorage] Cloudinary metadata result: format=${result.format}, bytes=${result.bytes}`);
       
       const format = result.format?.toLowerCase?.() || "";
       let contentType = "application/octet-stream";

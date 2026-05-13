@@ -92,44 +92,31 @@ router.get("/storage/objects/:objectId", async (req: Request, res: Response) => 
       .where(eq(clipsTable.objectPath, `/objects/${objectId}`))
       .limit(1);
 
-    // Detect correct Cloudinary resource type from MIME type
-    const mimeType = clip?.mimeType || "";
+    // The objectId from params is already composite (e.g., "raw:uuid" or "image:uuid")
+    const compositeObjectId = objectId;
 
-    let resourceType: "image" | "video" | "raw" = "raw";
+    req.log.info({ compositeObjectId }, "Fetching object from storage");
 
-    if (mimeType.startsWith("image/")) {
-      resourceType = "image";
-    } else if (
-      mimeType.startsWith("video/") ||
-      mimeType.startsWith("audio/")
-    ) {
-      resourceType = "video";
-    }
-
-    // Build composite object ID
-    const compositeObjectId = `${resourceType}:${objectId}`;
-
-    // Fetch Cloudinary metadata and stream
+    // Fetch Cloudinary metadata and the file stream in parallel
     const [metadata, stream] = await Promise.all([
-      objectStorageService
-        .getObjectMetadata(compositeObjectId)
-        .catch(() => null),
-
-      objectStorageService.getObjectFileStream(compositeObjectId),
+      objectStorageService.getObjectMetadata(compositeObjectId).catch((err) => {
+        req.log.error({ err, compositeObjectId }, "Failed to fetch metadata");
+        return null;
+      }),
+      objectStorageService.getObjectFileStream(compositeObjectId)
     ]);
-
+    
     // MIME Type Resolution Logic:
     // 1. Start with database value
     // 2. If DB is missing or generic (octet-stream), trust Cloudinary's detection
     // 3. For critical formats (PDF, Office docs), always prefer Cloudinary's detected format
     let contentType = clip?.mimeType || "application/octet-stream";
-
+    
     if (metadata?.contentType) {
       const isDbGeneric = !clip?.mimeType || clip.mimeType === "application/octet-stream";
-      const format = metadata?.format?.toLowerCase?.() || "";
-      const isHighPriority = ["pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt",].includes(format);
-
-
+      const format = metadata.format?.toLowerCase() || "";
+      const isHighPriority = ["pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt"].includes(format);
+      
       if (isDbGeneric || isHighPriority) {
         contentType = metadata.contentType;
       }
@@ -137,19 +124,34 @@ router.get("/storage/objects/:objectId", async (req: Request, res: Response) => 
 
     const finalFilename = (queryFilename as string) || clip?.fileName || "file";
 
-    // Use Express helper for Content-Disposition (handles UTF-8 and quoting)
+    // Set response headers
     if (queryFilename || clip?.fileName) {
       res.attachment(finalFilename);
     }
-
+    
     res.setHeader("Content-Type", contentType);
+    
+    // CRITICAL: Set Content-Length to avoid "File wasn't available" errors in browsers
+    if (metadata?.size) {
+      res.setHeader("Content-Length", metadata.size);
+    }
+
+    req.log.info({ 
+      objectId: compositeObjectId, 
+      contentType, 
+      size: metadata?.size,
+      filename: finalFilename 
+    }, "Streaming file to client");
 
     (stream as NodeJS.ReadableStream)
       .on("error", (err) => {
-        req.log.error({ err }, "Stream error");
+        req.log.error({ err, objectId: compositeObjectId }, "Stream error during piping");
         if (!res.headersSent) {
           res.status(500).json({ error: "Stream failed" });
         }
+      })
+      .on("end", () => {
+        req.log.info({ objectId: compositeObjectId }, "Stream completed successfully");
       })
       .pipe(res);
   } catch (error) {
