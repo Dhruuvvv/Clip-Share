@@ -13,40 +13,66 @@ const clipsRouter = Router();
 
 // GET /clips — list all clips, most recent first
 clipsRouter.get("/clips", async (req, res) => {
-  const parsed = ListClipsQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid query params", details: parsed.error.issues });
-    return;
+  try {
+    const parsed = ListClipsQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid query params", details: parsed.error.issues });
+      return;
+    }
+    const { limit, offset } = parsed.data;
+
+    const [items, totalResult] = await Promise.all([
+      db
+        .select()
+        .from(clipsTable)
+        .orderBy(desc(clipsTable.pinned), desc(clipsTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ value: count() }).from(clipsTable),
+    ]);
+
+    // Ensure backward compatibility: provide default resourceType for old rows
+    const sanitizedItems = items.map(item => ({
+      ...item,
+      resourceType: item.resourceType ?? "raw"
+    }));
+
+    res.json({ items: sanitizedItems, total: Number(totalResult[0]?.value ?? 0) });
+  } catch (error) {
+    req.log.error({ err: error }, "Error fetching clips");
+    res.status(500).json({ error: "Internal Server Error", message: error instanceof Error ? error.message : String(error) });
   }
-  const { limit, offset } = parsed.data;
-
-  const [items, totalResult] = await Promise.all([
-    db
-      .select()
-      .from(clipsTable)
-      .orderBy(desc(clipsTable.pinned), desc(clipsTable.createdAt))
-      .limit(limit)
-      .offset(offset),
-    db.select({ value: count() }).from(clipsTable),
-  ]);
-
-  res.json({ items, total: totalResult[0]?.value ?? 0 });
 });
 
 // POST /clips — create a new clip
 clipsRouter.post("/clips", async (req, res) => {
-  const parsed = CreateClipBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid body", details: parsed.error.issues });
-    return;
+  try {
+    const parsed = CreateClipBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid body", details: parsed.error.issues });
+      return;
+    }
+
+    // Default resourceType to 'raw' if not provided for safety
+    const insertData = {
+      ...parsed.data,
+      resourceType: parsed.data.resourceType ?? "raw"
+    };
+
+    console.log(`[DEBUG] Inserting clip with objectPath: "${insertData.objectPath}"`);
+
+    const [clip] = await db
+      .insert(clipsTable)
+      .values(insertData)
+      .returning();
+
+    console.log(`[DEBUG] Saved clip ID: ${clip.id}, objectPath in DB: "${clip.objectPath}"`);
+
+    res.status(201).json(clip);
+  } catch (error) {
+    req.log.error({ err: error }, "Error creating clip");
+    res.status(500).json({ error: "Internal Server Error", message: error instanceof Error ? error.message : String(error) });
   }
-
-  const [clip] = await db
-    .insert(clipsTable)
-    .values(parsed.data)
-    .returning();
-
-  res.status(201).json(clip);
 });
 
 // PATCH /clips/:id — update a clip (e.g. toggle pin)
@@ -91,30 +117,42 @@ clipsRouter.delete("/clips/:id", async (req, res) => {
 
 // GET /clips/summary — usage stats
 clipsRouter.get("/clips/summary", async (req, res) => {
-  const [totals, recentClips] = await Promise.all([
-    db
-      .select({
-        totalClips: count(),
-        textCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'text' then 1 else 0 end) as int)`,
-        linkCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'link' then 1 else 0 end) as int)`,
-        fileCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'file' then 1 else 0 end) as int)`,
-      })
-      .from(clipsTable),
-    db
-      .select()
-      .from(clipsTable)
-      .orderBy(desc(clipsTable.createdAt))
-      .limit(5),
-  ]);
+  try {
+    const [totals, recentClips] = await Promise.all([
+      db
+        .select({
+          totalClips: count(),
+          textCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'text' then 1 else 0 end) as int)`,
+          linkCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'link' then 1 else 0 end) as int)`,
+          fileCount: sql<number>`cast(sum(case when ${clipsTable.type} = 'file' then 1 else 0 end) as int)`,
+        })
+        .from(clipsTable),
+      db
+        .select()
+        .from(clipsTable)
+        .orderBy(desc(clipsTable.createdAt))
+        .limit(5),
+    ]);
 
-  const row = totals[0];
-  res.json({
-    totalClips: row?.totalClips ?? 0,
-    textCount: row?.textCount ?? 0,
-    linkCount: row?.linkCount ?? 0,
-    fileCount: row?.fileCount ?? 0,
-    recentClips,
-  });
+    const row = totals[0];
+    
+    // Ensure backward compatibility for recent clips
+    const sanitizedRecent = recentClips.map(clip => ({
+      ...clip,
+      resourceType: clip.resourceType ?? "raw"
+    }));
+
+    res.json({
+      totalClips: Number(row?.totalClips ?? 0),
+      textCount: Number(row?.textCount ?? 0),
+      linkCount: Number(row?.linkCount ?? 0),
+      fileCount: Number(row?.fileCount ?? 0),
+      recentClips: sanitizedRecent,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Error fetching clips summary");
+    res.status(500).json({ error: "Internal Server Error", message: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 export default clipsRouter;

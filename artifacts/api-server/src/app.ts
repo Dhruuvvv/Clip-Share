@@ -32,4 +32,14 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  req.log.error({ err }, "Unhandled error occurred");
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: process.env.NODE_ENV === "development" ? err.message : "An unexpected error occurred",
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
+});
+
 export default app;

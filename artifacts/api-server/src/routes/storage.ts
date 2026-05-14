@@ -33,9 +33,12 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
       resourceType = "video";
     }
 
-    const objectId = objectStorageService.generateObjectId();
+    const objectId = objectStorageService.generateObjectId(resourceType);
     const uploadURL = `/api/storage/uploads/${resourceType}/${objectId}`;
     const objectPath = objectStorageService.normalizeObjectPath(objectId);
+
+    console.log(`[DEBUG] Generated objectId: "${objectId}"`);
+    console.log(`[DEBUG] Generated objectPath: "${objectPath}"`);
 
     res.json(
       RequestUploadUrlResponse.parse({
@@ -90,6 +93,10 @@ router.get("/storage/objects/:objectId", async (req: Request, res: Response) => 
       return;
     }
 
+    console.log(`[DEBUG] Requested download for objectId: "${objectId}"`);
+    const searchPath = `/objects/${objectId}`;
+    console.log(`[DEBUG] Searching DB for objectPath: "${searchPath}"`);
+
     // Fetch clip metadata from DB to get resourceType and fileName
     const [clip] = await db
       .select()
@@ -102,8 +109,8 @@ router.get("/storage/objects/:objectId", async (req: Request, res: Response) => 
       return;
     }
 
-    // Use DB-persisted resourceType directly
-    const resourceType = (clip.resourceType as CloudinaryResourceType) || "raw";
+    // Extract resourceType directly from composite objectId
+    const { resourceType } = objectStorageService.parseCompositeId(objectId);
 
     // Fetch Cloudinary metadata and stream using specific resourceType
     const [metadata, stream] = await Promise.all([

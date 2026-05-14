@@ -24,10 +24,23 @@ export class ObjectStorageService {
   }
 
   /**
-   * Generates a new unique object ID.
+   * Generates a new unique object ID, optionally with a resource type prefix.
    */
-  generateObjectId(): string {
-    return randomUUID();
+  generateObjectId(resourceType?: CloudinaryResourceType): string {
+    const uuid = randomUUID();
+    return resourceType ? `${resourceType}__${uuid}` : uuid;
+  }
+
+  /**
+   * Parses a composite object ID (resourceType:uuid) into its components.
+   * Falls back to "raw" for legacy IDs.
+   */
+  parseCompositeId(objectId: string): { resourceType: CloudinaryResourceType; uuid: string } {
+    if (objectId.includes("__")) {
+      const [resourceType, uuid] = objectId.split("__");
+      return { resourceType: resourceType as CloudinaryResourceType, uuid };
+    }
+    return { resourceType: "raw", uuid: objectId };
   }
 
   /**
