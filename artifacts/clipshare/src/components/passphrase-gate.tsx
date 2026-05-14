@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { usePassphrase } from "@/contexts/passphrase-context";
-import { useGetSalt } from "@workspace/api-client-react";
+import { useGetSalt, getSalt } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -39,26 +39,29 @@ export function PassphraseGate({ children }: PassphraseGateProps) {
       return;
     }
 
-    if (!saltData?.salt) {
-      console.error("[Unlock] Salt data is missing. Is the API reachable?", { saltData, isLoadingSalt });
-      toast({
-        title: "Connection Error",
-        description: "Could not reach the server to retrieve security parameters. Please check your connection.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsUnlocking(true);
     console.log("[Unlock] Starting decryption process...");
+    
     try {
-      await unlock(passphrase.trim(), saltData.salt);
+      let currentSalt = saltData?.salt;
+      
+      if (!currentSalt) {
+        console.log("[Unlock] Salt not available yet, fetching manually...");
+        const res = await getSalt();
+        currentSalt = res.salt;
+      }
+      
+      if (!currentSalt) {
+        throw new Error("Could not retrieve salt.");
+      }
+
+      await unlock(passphrase.trim(), currentSalt);
       console.log("[Unlock] Decryption successful");
     } catch (err) {
       console.error("[Unlock] Decryption failed:", err);
       toast({
         title: "Failed to unlock",
-        description: "Something went wrong. Check your passphrase and try again.",
+        description: "Something went wrong. Check your connection or passphrase and try again.",
         variant: "destructive",
       });
     } finally {
@@ -88,12 +91,12 @@ export function PassphraseGate({ children }: PassphraseGateProps) {
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}
             autoFocus
-            disabled={isLoadingSalt || isUnlocking}
+            disabled={isUnlocking}
             data-testid="input-passphrase"
           />
           <Button
             type="submit"
-            disabled={!passphrase.trim() || isLoadingSalt || isUnlocking}
+            disabled={!passphrase.trim() || isUnlocking}
             data-testid="button-unlock"
           >
             {isUnlocking ? "Unlocking..." : "Unlock"}
